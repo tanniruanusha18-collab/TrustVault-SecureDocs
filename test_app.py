@@ -1,37 +1,16 @@
 
 import io
 import uuid
-
 import pytest
-
 import app as trustvault
 
 
 @pytest.fixture
-def client(tmp_path):
-    database_path = tmp_path / "test_trustvault.db"
+def client():
+    trustvault.app.config["TESTING"] = True
 
-    # Configure the app to use a temporary test database.
-    trustvault.app.config.update(
-        TESTING=True,
-        SQLALCHEMY_DATABASE_URI=f"sqlite:///{database_path.as_posix()}",
-    )
-
-    # Initialize tables inside the application context.
-    with trustvault.app.app_context():
-        trustvault.db.session.remove()
-        trustvault.db.engine.dispose()
-        trustvault.db.create_all()
-
-    # Provide a test client to each test.
     with trustvault.app.test_client() as test_client:
         yield test_client
-
-    # Clean up the test database.
-    with trustvault.app.app_context():
-        trustvault.db.session.remove()
-        trustvault.db.drop_all()
-        trustvault.db.engine.dispose()
 
 
 def register(client, username):
@@ -95,3 +74,43 @@ def test_upload_rejects_unsupported_file(client):
 
     assert response.status_code == 200
     assert b"file type is not allowed" in response.data.lower()
+
+
+def test_other_user_cannot_download_private_document(client):
+    owner_username, _ = register(client, "private_owner")
+
+    upload_response = client.post(
+        "/upload",
+        data={
+            "document": (
+                io.BytesIO(b"private document content"),
+                "private.txt",
+            )
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    assert upload_response.status_code == 200
+
+    with trustvault.app.app_context():
+        owner = trustvault.User.query.filter_by(
+            username=owner_username
+        ).first()
+
+        document = trustvault.Document.query.filter_by(
+            owner_id=owner.id,
+            original_name="private.txt",
+        ).first()
+
+        assert document is not None
+        document_id = document.id
+
+    logout(client)
+
+    _, login_response = register(client, "private_viewer")
+    assert login_response.status_code == 200
+
+    response = client.get(f"/download/{document_id}")
+
+    assert response.status_code == 403
