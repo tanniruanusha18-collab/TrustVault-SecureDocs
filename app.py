@@ -13,6 +13,7 @@ from flask_login import (
     login_user, logout_user
 )
 from flask_sqlalchemy import SQLAlchemy
+from flask_wtf.csrf import CSRFProtect
 from markupsafe import escape
 from sqlalchemy import or_, select
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -34,6 +35,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+csrf = CSRFProtect(app)
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -196,6 +198,7 @@ Signed in as <b>{{ current_user.username }}</b> |
 <h2>Upload a document</h2>
 <form method="post" action="{{ url_for('upload') }}"
       enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <input type="file" name="document" required>
 <button type="submit">Upload securely</button>
 </form>
@@ -214,6 +217,7 @@ Signed in as <b>{{ current_user.username }}</b> |
 
 {% if doc.owner_id == current_user.id %}
 <form method="post" action="{{ url_for('share', document_id=doc.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <label>Share with username:
 <input name="username" required>
 </label>
@@ -223,6 +227,7 @@ Signed in as <b>{{ current_user.username }}</b> |
 </form>
 
 <form method="post" action="{{ url_for('revoke', document_id=doc.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <label>Revoke username:
 <input name="username" required>
 </label>
@@ -256,6 +261,7 @@ AUTH_PAGE = """
 <p>{{ message }}</p>
 {% endfor %}
 <form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <label>Username
 <input name="username" required minlength="3" maxlength="80">
 </label><br>

@@ -9,6 +9,7 @@ import app as trustvault
 @pytest.fixture
 def client():
     trustvault.app.config["TESTING"] = True
+    trustvault.app.config["WTF_CSRF_ENABLED"] = False
 
     with trustvault.app.test_client() as test_client:
         yield test_client
@@ -179,3 +180,19 @@ def test_revoked_user_cannot_download_document(client):
 
     denied_response = client.get(f"/download/{document_id}")
     assert denied_response.status_code == 403
+
+
+def test_csrf_rejects_post_without_token(client):
+    trustvault.app.config["WTF_CSRF_ENABLED"] = True
+
+    try:
+        response = client.post(
+            "/register",
+            data={
+                "username": "csrf_test_user",
+                "password": "TestPassword123!",
+            },
+        )
+        assert response.status_code == 400
+    finally:
+        trustvault.app.config["WTF_CSRF_ENABLED"] = False
