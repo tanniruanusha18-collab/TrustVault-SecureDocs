@@ -1,4 +1,3 @@
-
 import os
 import secrets
 from datetime import datetime, timezone
@@ -35,9 +34,10 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
-csrf = CSRFProtect(app)
 
+csrf = CSRFProtect(app)
 db = SQLAlchemy(app)
+
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
@@ -207,6 +207,16 @@ Signed in as <b>{{ current_user.username }}</b> |
 
 <section class="panel">
 <h2>My documents and shared documents</h2>
+<form method="get" action="{{ url_for('home') }}">
+    <input
+        type="search"
+        name="q"
+        placeholder="Search documents by filename..."
+        value="{{ search_query }}"
+    >
+    <button type="submit">Search</button>
+    <a href="{{ url_for('home') }}">Clear</a>
+</form>
 {% if documents %}
 <ul>
 {% for doc in documents %}
@@ -238,7 +248,7 @@ Signed in as <b>{{ current_user.username }}</b> |
 {% endfor %}
 </ul>
 {% else %}
-<p>No documents yet. Upload your first document above.</p>
+<p>No matching documents found, or no documents are available to you.</p>
 {% endif %}
 </section>
 {% endif %}
@@ -278,6 +288,7 @@ AUTH_PAGE = """
 
 @app.route("/")
 def home():
+    search_query = request.args.get("q", "").strip()
     documents = []
 
     if current_user.is_authenticated:
@@ -305,7 +316,15 @@ def home():
             {doc.id: doc for doc in owned + shared}.values()
         )
 
-    return render_template_string(PAGE, documents=documents)
+        if search_query:
+            documents = [
+                doc for doc in documents
+                if search_query.casefold() in doc.original_name.casefold()
+            ]
+
+    return render_template_string(
+        PAGE, documents=documents, search_query=search_query
+    )
 
 
 @app.route("/register", methods=["GET", "POST"])
